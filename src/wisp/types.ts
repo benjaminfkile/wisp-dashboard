@@ -13,12 +13,52 @@ export type ContractStatus =
   | 'released'
   | 'expired'
 
-/** Body for `POST /contracts` (app token). `preset`, `userdata`, `meta` optional. */
+/** Network mode for a contract's container, from wisp's `limits.networks`. */
+export type WispNetwork = 'none' | 'open' | 'egress'
+
+/** Optional per-contract resource caps sent on `POST /contracts`. */
+export interface ContractResources {
+  cpus?: number
+  memory_mb?: number
+  pids?: number
+}
+
+/**
+ * Body for `POST /contracts` (app token). `ttl_seconds` is required; `image`,
+ * `network`, `resources`, `userdata`, `meta` are optional. `image` must be one
+ * of the allow-listed images from `GET /images` (defaults to the discovery
+ * `default`); `network` must be one of `limits.networks` (defaults to `open`).
+ */
 export interface CreateContractRequest {
   ttl_seconds: number
-  preset?: string
+  image?: string
+  network?: WispNetwork
+  resources?: ContractResources
   userdata?: string
   meta?: Record<string, unknown>
+}
+
+/**
+ * Operator-configured limits returned by `GET /images`. A `0` value means NO
+ * cap for that dimension. `networks` lists the allowed network modes.
+ */
+export interface WispLimits {
+  max_ttl_seconds: number
+  max_cpus: number
+  max_memory_mb: number
+  pids_limit: number
+  networks: WispNetwork[]
+}
+
+/**
+ * Response from `GET /images` (unauthenticated). Advertises the image
+ * allow-list, the default image, and the operator limits used to bound a
+ * create request.
+ */
+export interface ImagesResponse {
+  images: string[]
+  default: string
+  limits: WispLimits
 }
 
 /** `201` response from `POST /contracts`. `token` is the per-contract token. */

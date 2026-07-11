@@ -50,20 +50,56 @@ Response:
 { "status": "ok" }
 ```
 
+### `GET /images`
+
+**Unauthenticated.** Advertises the operator-configured image allow-list, the
+default image, and the limits that bound a create request. Wisp has no named
+presets; a create request instead picks an image, network, and resources
+directly from what this endpoint advertises.
+
+Response:
+
+```json
+{
+  "images": ["ubuntu:24.04", "alpine:3.20"],
+  "default": "ubuntu:24.04",
+  "limits": {
+    "max_ttl_seconds": 86400,
+    "max_cpus": 4,
+    "max_memory_mb": 8192,
+    "pids_limit": 512,
+    "networks": ["none", "open", "egress"]
+  }
+}
+```
+
+- A `0` value in any numeric limit means **NO cap** for that dimension.
+- `networks` entries are drawn from `"none"`, `"open"`, and `"egress"`.
+
 ### `POST /contracts`
 
 Requires the **app token**. Creates and provisions a new contract (container).
 
-Request body (`preset`, `userdata`, `meta` are optional):
+Request body — `ttl_seconds` is **required**; `image`, `network`, `resources`,
+`userdata`, and `meta` are optional:
 
 ```json
 {
   "ttl_seconds": 3600,
-  "preset": "default",
+  "image": "ubuntu:24.04",
+  "network": "open",
+  "resources": { "cpus": 2, "memory_mb": 2048, "pids": 256 },
   "userdata": "arbitrary string",
   "meta": { "any": "object" }
 }
 ```
+
+- `image` must be one of the `images` from `GET /images`; it defaults to that
+  endpoint's `default` when omitted.
+- `network` must be one of `limits.networks`; it defaults to `"open"` when
+  allowed.
+- `resources` fields (`cpus`, `memory_mb`, `pids`) are each optional and must
+  not exceed the corresponding non-zero limit from `GET /images`.
 
 Response `201`:
 

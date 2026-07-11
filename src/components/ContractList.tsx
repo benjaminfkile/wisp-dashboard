@@ -121,10 +121,19 @@ function ContractCard({ contract }: { contract: TrackedContract }) {
               />
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              preset:{' '}
+              image:{' '}
               <Box component="span" sx={{ color: 'text.primary' }}>
-                {contract.preset || 'default'}
+                {contract.image || 'default'}
               </Box>
+              {contract.network && (
+                <>
+                  {'  ·  '}
+                  network:{' '}
+                  <Box component="span" sx={{ color: 'text.primary' }}>
+                    {contract.network}
+                  </Box>
+                </>
+              )}
               {'  ·  '}
               remaining:{' '}
               <Box component="span" sx={{ color: 'text.primary' }}>
@@ -170,8 +179,8 @@ function ContractCard({ contract }: { contract: TrackedContract }) {
 
 /**
  * The live list of contracts this dashboard has created. Each card shows a
- * shortened id (with copy), a color-coded status chip, the preset, and the
- * human-readable remaining TTL, plus Release / Remove actions. Status and TTL
+ * shortened id (with copy), a color-coded status chip, the image (and network),
+ * and the human-readable remaining TTL, plus Release / Remove actions. Status and TTL
  * are kept live by the polling in `ContractsProvider`.
  */
 export default function ContractList() {

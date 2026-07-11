@@ -6,6 +6,7 @@ import type {
   CreateContractRequest,
   CreateContractResponse,
   ExecResponse,
+  ImagesResponse,
   PublishEventRequest,
 } from '../wisp/types'
 
@@ -16,6 +17,7 @@ import type {
  */
 export interface WispClient {
   health(): Promise<boolean>
+  getImages(): Promise<ImagesResponse>
   createContract(req: CreateContractRequest): Promise<CreateContractResponse>
   getContract(id: string): Promise<ContractStatusResponse>
   deleteContract(id: string): Promise<ContractStatusResponse>
@@ -37,6 +39,7 @@ export function useWispClient(): WispClient {
   return useMemo<WispClient>(
     () => ({
       health: wisp.health,
+      getImages: wisp.getImages,
       createContract: (req) => wisp.createContract(req, appToken || undefined),
       getContract: wisp.getContract,
       deleteContract: wisp.deleteContract,
