@@ -1,18 +1,30 @@
-import { useHealth } from '../hooks/useHealth'
+import Chip from '@mui/material/Chip'
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
+import { useHealth, type HealthState } from '../hooks/useHealth'
 
-const LABELS: Record<string, string> = {
+const LABELS: Record<HealthState, string> = {
   connecting: 'connecting…',
   connected: 'connected',
   disconnected: 'disconnected',
 }
 
-/** Header pill showing live wisp connectivity, polled from `/wisp/healthz`. */
+const COLORS: Record<HealthState, 'success' | 'error' | 'default'> = {
+  connecting: 'default',
+  connected: 'success',
+  disconnected: 'error',
+}
+
+/** Header chip showing live wisp connectivity, polled from `/wisp/healthz`. */
 export default function HealthIndicator() {
   const state = useHealth(3000)
   return (
-    <div className={`health health--${state}`} title="GET /wisp/healthz">
-      <span className="health__dot" aria-hidden="true" />
-      <span className="health__label">wisp: {LABELS[state]}</span>
-    </div>
+    <Chip
+      variant="outlined"
+      color={COLORS[state]}
+      size="small"
+      icon={<FiberManualRecordIcon fontSize="small" />}
+      label={`wisp: ${LABELS[state]}`}
+      title="GET /wisp/healthz"
+    />
   )
 }
