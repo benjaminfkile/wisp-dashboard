@@ -3,15 +3,19 @@ import AppBar from '@mui/material/AppBar'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
+import Button from '@mui/material/Button'
 import Container from '@mui/material/Container'
 import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
+import AddIcon from '@mui/icons-material/Add'
 import SettingsIcon from '@mui/icons-material/Settings'
 import HealthIndicator from './components/HealthIndicator'
 import SettingsPanel from './components/SettingsPanel'
+import CreateLeaseDialog from './components/CreateLeaseDialog'
+import ContractList from './components/ContractList'
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -24,6 +28,13 @@ export default function App() {
             Wisp Dashboard
           </Typography>
           <HealthIndicator />
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setCreateOpen(true)}
+          >
+            New Lease
+          </Button>
           <IconButton
             aria-label="Settings"
             title="Settings"
@@ -40,33 +51,22 @@ export default function App() {
         component="main"
         sx={{
           flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
           p: { xs: 3, sm: 4 },
         }}
       >
         <Container maxWidth="md">
-          <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="h5" component="h2" gutterBottom>
-              Lease management is coming next.
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              This is the app shell. It talks to a running wisp instance through
-              the same-origin{' '}
-              <Box component="code" sx={{ color: 'primary.main' }}>
-                /wisp
-              </Box>{' '}
-              dev proxy. The header indicator polls{' '}
-              <Box component="code" sx={{ color: 'primary.main' }}>
-                /wisp/healthz
-              </Box>{' '}
-              to prove the proxy works end to end.
-            </Typography>
-          </Paper>
+          <Typography variant="h5" component="h2" gutterBottom>
+            Leases
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Contracts this dashboard has created. Status and remaining TTL are
+            polled live from wisp.
+          </Typography>
+          <ContractList />
         </Container>
       </Box>
 
+      <CreateLeaseDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </Box>
   )

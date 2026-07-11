@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import App from './App'
 import { SettingsProvider } from './hooks/useSettings'
+import { ContractsProvider } from './hooks/useContracts'
 import theme from './theme'
 import './index.css'
 
@@ -12,7 +13,9 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <SettingsProvider>
-        <App />
+        <ContractsProvider>
+          <App />
+        </ContractsProvider>
       </SettingsProvider>
     </ThemeProvider>
   </StrictMode>,
