@@ -44,6 +44,10 @@ export interface Contracts {
   releaseLease(id: string): Promise<void>
   refresh(id: string): Promise<void>
   removeLease(id: string): void
+  /** The contract whose detail view is open, or `null` for the list. */
+  selectedId: string | null
+  /** Open the detail view for `id`, or return to the list with `null`. */
+  select(id: string | null): void
 }
 
 /** Terminal states that are never polled. */
@@ -88,6 +92,11 @@ const ContractsContext = createContext<Contracts | null>(null)
 export function ContractsProvider({ children }: { children: ReactNode }) {
   const client = useWispClient()
   const [contracts, setContracts] = useState<TrackedContract[]>(readContracts)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const select = useCallback((id: string | null) => {
+    setSelectedId(id)
+  }, [])
 
   // Persist on every change.
   useEffect(() => {
@@ -166,6 +175,8 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
 
   const removeLease = useCallback((id: string) => {
     setContracts((prev) => prev.filter((c) => c.contract_id !== id))
+    // If the removed contract was open in the detail view, return to the list.
+    setSelectedId((cur) => (cur === id ? null : cur))
   }, [])
 
   // Single app-wide poll loop for all non-terminal contracts. `refresh` is kept
@@ -189,8 +200,16 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<Contracts>(
-    () => ({ contracts, createLease, releaseLease, refresh, removeLease }),
-    [contracts, createLease, releaseLease, refresh, removeLease],
+    () => ({
+      contracts,
+      createLease,
+      releaseLease,
+      refresh,
+      removeLease,
+      selectedId,
+      select,
+    }),
+    [contracts, createLease, releaseLease, refresh, removeLease, selectedId, select],
   )
 
   return (

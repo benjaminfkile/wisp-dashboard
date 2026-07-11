@@ -51,7 +51,7 @@ function humanDuration(total?: number): string {
 
 /** A single tracked-contract card. */
 function ContractCard({ contract }: { contract: TrackedContract }) {
-  const { releaseLease, removeLease } = useContracts()
+  const { releaseLease, removeLease, select } = useContracts()
   const [copied, setCopied] = useState(false)
   const [releasing, setReleasing] = useState(false)
 
@@ -134,6 +134,13 @@ function ContractCard({ contract }: { contract: TrackedContract }) {
           </Box>
 
           <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => select(contract.contract_id)}
+            >
+              Open
+            </Button>
             <Button
               size="small"
               color="error"

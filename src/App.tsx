@@ -12,10 +12,17 @@ import HealthIndicator from './components/HealthIndicator'
 import SettingsPanel from './components/SettingsPanel'
 import CreateLeaseDialog from './components/CreateLeaseDialog'
 import ContractList from './components/ContractList'
+import ContractDetail from './components/ContractDetail'
+import { useContracts } from './hooks/useContracts'
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const { contracts, selectedId } = useContracts()
+
+  const selected = selectedId
+    ? contracts.find((c) => c.contract_id === selectedId) ?? null
+    : null
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -55,14 +62,20 @@ export default function App() {
         }}
       >
         <Container maxWidth="md">
-          <Typography variant="h5" component="h2" gutterBottom>
-            Leases
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Contracts this dashboard has created. Status and remaining TTL are
-            polled live from wisp.
-          </Typography>
-          <ContractList />
+          {selected ? (
+            <ContractDetail contract={selected} />
+          ) : (
+            <>
+              <Typography variant="h5" component="h2" gutterBottom>
+                Leases
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Contracts this dashboard has created. Status and remaining TTL
+                are polled live from wisp.
+              </Typography>
+              <ContractList />
+            </>
+          )}
         </Container>
       </Box>
 
