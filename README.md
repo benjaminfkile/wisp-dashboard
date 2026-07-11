@@ -5,6 +5,11 @@ A standalone **React + Vite + TypeScript** browser dashboard and console for the
 Docker containers ("contracts") over an HTTP + WebSocket API. This app runs in a
 browser alongside a running wisp instance and talks to it over wisp's API.
 
+The UI is built with **Material UI (MUI)** + Emotion and the dark theme in
+[`src/theme.ts`](src/theme.ts), applied app-wide via `ThemeProvider` +
+`CssBaseline`. New components should use MUI components and the `sx` prop for
+styling rather than ad-hoc CSS files.
+
 It is a separate client app: the wisp source is not in this repo. The full API
 contract the dashboard builds against is captured in
 [`docs/WISP_API.md`](docs/WISP_API.md).
@@ -62,8 +67,11 @@ disconnected — proving the proxy works end to end.
 
 ```
 docs/WISP_API.md        full wisp API contract (auth, endpoints, lifecycle)
-src/wisp/types.ts       TypeScript types for the wisp API (types only, no client yet)
-src/App.tsx             app shell (header + health indicator + placeholder)
+src/wisp/types.ts       TypeScript types for the wisp API
+src/wisp/client.ts      typed HTTP/WebSocket client for the wisp API
+src/theme.ts            MUI dark theme (ThemeProvider + CssBaseline in main.tsx)
+src/App.tsx             app shell (MUI AppBar header + health indicator + placeholder)
 src/hooks/useHealth.ts  polls /wisp/healthz
+src/hooks/useSettings.tsx  app-token context, persisted to localStorage
 vite.config.ts          the /wisp -> VITE_WISP_TARGET dev proxy
 ```
