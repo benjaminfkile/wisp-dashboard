@@ -9,6 +9,7 @@ import type {
   CreateContractRequest,
   CreateContractResponse,
   ExecResponse,
+  ImagesResponse,
   PublishEventRequest,
 } from './types'
 
@@ -74,6 +75,14 @@ export async function health(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * `GET /wisp/images` — the image allow-list, default image, and operator
+ * limits. Unauthenticated (no token needed).
+ */
+export function getImages(): Promise<ImagesResponse> {
+  return request<ImagesResponse>('/images')
 }
 
 /** `POST /wisp/contracts` — requires the app token when wisp has one set. */

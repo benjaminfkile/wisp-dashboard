@@ -71,7 +71,7 @@ function Field({
 }
 
 /**
- * The Overview tab for a lease: a details card (status, preset, created-at,
+ * The Overview tab for a lease: a details card (status, image, network, created-at,
  * live uptime, live TTL countdown, computed expires-at) plus the live
  * lifecycle events feed. Uptime and the countdown tick locally every second;
  * the countdown re-syncs from the store's polled `ttl_seconds_remaining` and
@@ -102,7 +102,8 @@ export default function LeaseOverview({ contract }: { contract: TrackedContract 
               />
             </Field>
             <Divider flexItem />
-            <Field label="Preset">{contract.preset || 'default'}</Field>
+            <Field label="Image">{contract.image || 'default'}</Field>
+            {contract.network && <Field label="Network">{contract.network}</Field>}
             <Field label="Created">{new Date(contract.created_at).toLocaleString()}</Field>
             <Field label="Uptime" mono>
               {formatDuration(uptime)}

@@ -10,7 +10,11 @@ import {
 } from 'react'
 import { useWispClient } from './useWispClient'
 import { WispError } from '../wisp/client'
-import type { ContractStatus, CreateContractRequest } from '../wisp/types'
+import type {
+  ContractStatus,
+  CreateContractRequest,
+  WispNetwork,
+} from '../wisp/types'
 
 /** localStorage key under which tracked contracts are persisted. */
 export const CONTRACTS_KEY = 'wisp.contracts'
@@ -28,7 +32,10 @@ const POLL_INTERVAL_MS = 4000
 export interface TrackedContract {
   contract_id: string
   token: string
-  preset?: string
+  /** The image this contract was created from (from the allow-list). */
+  image?: string
+  /** The network mode the contract was created with. */
+  network?: WispNetwork
   ttl_seconds: number
   /** Client clock (`Date.now()`) at creation. */
   created_at: number
@@ -121,7 +128,8 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       const tracked: TrackedContract = {
         contract_id: res.contract_id,
         token: res.token,
-        preset: req.preset || undefined,
+        image: req.image || undefined,
+        network: req.network,
         ttl_seconds: req.ttl_seconds,
         created_at: Date.now(),
         status: res.status,
