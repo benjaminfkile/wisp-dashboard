@@ -69,25 +69,33 @@ Response:
     "max_memory_mb": 8192,
     "pids_limit": 512,
     "networks": ["none", "open", "egress"]
-  }
+  },
+  "isolation": { "supported": ["shared", "sandboxed"], "default": "shared" }
 }
 ```
 
 - A `0` value in any numeric limit means **NO cap** for that dimension.
 - `networks` entries are drawn from `"none"`, `"open"`, and `"egress"`.
+- `isolation.supported` is the host's **effective** isolation posture — the
+  operator allow-list intersected with the levels the daemon can actually run
+  (`shared` always; `sandboxed` when gVisor/`runsc` is registered; `vm` on a
+  Kata-enabled Linux daemon or a Windows daemon via Hyper-V). `isolation.default`
+  is applied when a create omits `isolation`. A consumer should only offer the
+  `supported` levels.
 
 ### `POST /contracts`
 
 Requires the **app token**. Creates and provisions a new contract (container).
 
-Request body — `ttl_seconds` is **required**; `image`, `network`, `resources`,
-`userdata`, and `meta` are optional:
+Request body — `ttl_seconds` is **required**; `image`, `network`, `isolation`,
+`resources`, `userdata`, and `meta` are optional:
 
 ```json
 {
   "ttl_seconds": 3600,
   "image": "ubuntu:24.04",
   "network": "open",
+  "isolation": "shared",
   "resources": { "cpus": 2, "memory_mb": 2048, "pids": 256 },
   "userdata": "arbitrary string",
   "meta": { "any": "object" }
@@ -98,6 +106,9 @@ Request body — `ttl_seconds` is **required**; `image`, `network`, `resources`,
   endpoint's `default` when omitted.
 - `network` must be one of `limits.networks`; it defaults to `"open"` when
   allowed.
+- `isolation` must be one of `GET /images` `isolation.supported`; it defaults to
+  `isolation.default` (`shared`) when omitted. Levels are ordered
+  `shared` < `sandboxed` < `vm` (`confidential` is reserved and rejected).
 - `resources` fields (`cpus`, `memory_mb`, `pids`) are each optional and must
   not exceed the corresponding non-zero limit from `GET /images`.
 
