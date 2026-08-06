@@ -51,14 +51,41 @@ export interface WispLimits {
 }
 
 /**
+ * A single GPU device the host advertises in `GET /images` `gpu.devices`.
+ * `vram_mb` is the device's video memory in mebibytes; `class` is a
+ * human-readable model/class (e.g. `"NVIDIA A100"`).
+ */
+export interface GpuDevice {
+  id: string
+  class: string
+  vram_mb: number
+}
+
+/**
+ * Host GPU capability — the top-level `gpu` object on `GET /images`. **Absent
+ * on older wisp**, in which case the dashboard treats the host as having no GPU
+ * support (render nothing). When `supported` is false the host offers no GPUs
+ * and `devices` is empty. `max_gpus` is the per-contract device cap and
+ * `isolations` lists the isolation levels under which a GPU can be attached.
+ */
+export interface GpuCapability {
+  supported: boolean
+  devices: GpuDevice[]
+  max_gpus: number
+  isolations: string[]
+}
+
+/**
  * Response from `GET /images` (unauthenticated). Advertises the image
  * allow-list, the default image, and the operator limits used to bound a
- * create request.
+ * create request. `gpu` is the host GPU capability; it is **optional** and
+ * absent on older wisp.
  */
 export interface ImagesResponse {
   images: string[]
   default: string
   limits: WispLimits
+  gpu?: GpuCapability
 }
 
 /** `201` response from `POST /contracts`. `token` is the per-contract token. */
@@ -73,6 +100,13 @@ export interface ContractStatusResponse {
   contract_id: string
   status: ContractStatus
   ttl_seconds_remaining: number
+  /**
+   * The specific GPU device ids assigned to this contract, cross-referable to
+   * `GET /images` `gpu.devices`. **Absent/empty** when none are assigned or on
+   * older wisp. A restart-reconciled lease may reference a device id the live
+   * inventory no longer lists.
+   */
+  gpus?: string[]
 }
 
 /**

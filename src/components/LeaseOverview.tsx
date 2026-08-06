@@ -6,7 +6,9 @@ import Stack from '@mui/material/Stack'
 import Divider from '@mui/material/Divider'
 import Typography from '@mui/material/Typography'
 import { useCountdown, useElapsed } from '../hooks/useCountdown'
+import { useGpuCapability } from '../hooks/useGpuCapability'
 import LifecycleFeed from './LifecycleFeed'
+import AssignedGpus from './AssignedGpus'
 import type { TrackedContract } from '../hooks/useContracts'
 import type { ContractStatus } from '../wisp/types'
 
@@ -80,6 +82,8 @@ function Field({
 export default function LeaseOverview({ contract }: { contract: TrackedContract }) {
   const terminal = isTerminal(contract)
 
+  const gpu = useGpuCapability()
+
   const uptime = useElapsed(contract.created_at, terminal)
   const remaining = useCountdown(
     contract.ttl_seconds_remaining ?? contract.ttl_seconds,
@@ -123,6 +127,25 @@ export default function LeaseOverview({ contract }: { contract: TrackedContract 
               </Box>
             </Field>
             <Field label="Expires">{new Date(expiresAt).toLocaleString()}</Field>
+            {contract.gpus && contract.gpus.length > 0 && (
+              <>
+                <Divider flexItem />
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ flexShrink: 0 }}
+                  >
+                    GPUs
+                  </Typography>
+                  <AssignedGpus gpus={contract.gpus} devices={gpu?.devices} />
+                </Stack>
+              </>
+            )}
           </Stack>
         </CardContent>
       </Card>

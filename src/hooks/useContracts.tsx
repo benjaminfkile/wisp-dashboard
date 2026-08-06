@@ -41,6 +41,12 @@ export interface TrackedContract {
   created_at: number
   status: ContractStatus
   ttl_seconds_remaining?: number
+  /**
+   * GPU device ids assigned to this contract, from the polled status payload.
+   * Absent on older wisp or when no devices are assigned. Cross-reference to
+   * the host `gpu.devices` (see `useGpuCapability`) to resolve a device class.
+   */
+  gpus?: string[]
   /** Locally forgotten-from-polling flag (released or destroyed). */
   ended?: boolean
 }
@@ -164,6 +170,8 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
         patch(id, {
           status: res.status,
           ttl_seconds_remaining: res.ttl_seconds_remaining,
+          // Reflect the live device assignment (absent on older wisp).
+          gpus: res.gpus,
         })
       } catch (err) {
         if (err instanceof WispError && err.status === 404) {
