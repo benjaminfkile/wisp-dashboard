@@ -12,6 +12,7 @@ import Stack from '@mui/material/Stack'
 import CircularProgress from '@mui/material/CircularProgress'
 import { useContracts } from '../hooks/useContracts'
 import { useWispClient } from '../hooks/useWispClient'
+import GpuCapabilitySection from './GpuCapabilitySection'
 import { WispError } from '../wisp/client'
 import type {
   ContractResources,
@@ -393,6 +394,8 @@ export default function CreateLeaseDialog({
               sx={{ flex: 1 }}
             />
           </Stack>
+
+          <GpuCapabilitySection gpu={discovery?.gpu} />
 
           <TextField
             id="lease-userdata"

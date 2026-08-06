@@ -13,7 +13,8 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import { useContracts, type TrackedContract } from '../hooks/useContracts'
-import type { ContractStatus } from '../wisp/types'
+import { useGpuCapability } from '../hooks/useGpuCapability'
+import type { ContractStatus, GpuDevice } from '../wisp/types'
 
 type ChipColor = 'success' | 'warning' | 'info' | 'default'
 
@@ -49,13 +50,29 @@ function humanDuration(total?: number): string {
   return `${sec}s`
 }
 
+/**
+ * Render one assigned GPU device id as its class when resolvable against the
+ * live inventory, else the bare id (a restart-reconciled lease may reference a
+ * device the host no longer lists).
+ */
+function gpuLabel(id: string, byId: Map<string, GpuDevice>): string {
+  return byId.get(id)?.class ?? id
+}
+
 /** A single tracked-contract card. */
-function ContractCard({ contract }: { contract: TrackedContract }) {
+function ContractCard({
+  contract,
+  devices,
+}: {
+  contract: TrackedContract
+  devices?: GpuDevice[]
+}) {
   const { releaseLease, removeLease, select } = useContracts()
   const [copied, setCopied] = useState(false)
   const [releasing, setReleasing] = useState(false)
 
   const terminal = isTerminal(contract)
+  const byId = new Map((devices ?? []).map((d) => [d.id, d]))
 
   async function copyId() {
     try {
@@ -134,6 +151,15 @@ function ContractCard({ contract }: { contract: TrackedContract }) {
                   </Box>
                 </>
               )}
+              {contract.gpus && contract.gpus.length > 0 && (
+                <>
+                  {'  ·  '}
+                  gpus:{' '}
+                  <Box component="span" sx={{ color: 'text.primary' }}>
+                    {contract.gpus.map((id) => gpuLabel(id, byId)).join(', ')}
+                  </Box>
+                </>
+              )}
               {'  ·  '}
               remaining:{' '}
               <Box component="span" sx={{ color: 'text.primary' }}>
@@ -180,11 +206,14 @@ function ContractCard({ contract }: { contract: TrackedContract }) {
 /**
  * The live list of contracts this dashboard has created. Each card shows a
  * shortened id (with copy), a color-coded status chip, the image (and network),
- * and the human-readable remaining TTL, plus Release / Remove actions. Status and TTL
- * are kept live by the polling in `ContractsProvider`.
+ * any assigned GPUs (device class when resolvable against the live inventory,
+ * else the bare id), and the human-readable remaining TTL, plus Release /
+ * Remove actions. Status and TTL are kept live by the polling in
+ * `ContractsProvider`.
  */
 export default function ContractList() {
   const { contracts } = useContracts()
+  const gpu = useGpuCapability()
 
   if (contracts.length === 0) {
     return (
@@ -203,7 +232,7 @@ export default function ContractList() {
   return (
     <Stack spacing={2}>
       {contracts.map((c) => (
-        <ContractCard key={c.contract_id} contract={c} />
+        <ContractCard key={c.contract_id} contract={c} devices={gpu?.devices} />
       ))}
     </Stack>
   )

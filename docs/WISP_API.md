@@ -70,7 +70,16 @@ Response:
     "pids_limit": 512,
     "networks": ["none", "open", "egress"]
   },
-  "isolation": { "supported": ["shared", "sandboxed"], "default": "shared" }
+  "isolation": { "supported": ["shared", "sandboxed"], "default": "shared" },
+  "gpu": {
+    "supported": true,
+    "devices": [
+      { "id": "GPU-3a1f…", "class": "NVIDIA A100", "vram_mb": 40960 },
+      { "id": "GPU-9c2b…", "class": "NVIDIA A100", "vram_mb": 40960 }
+    ],
+    "max_gpus": 2,
+    "isolations": ["shared", "vm"]
+  }
 }
 ```
 
@@ -82,6 +91,20 @@ Response:
   Kata-enabled Linux daemon or a Windows daemon via Hyper-V). `isolation.default`
   is applied when a create omits `isolation`. A consumer should only offer the
   `supported` levels.
+- `gpu` is the host's **GPU capability**. It is **optional** — older wisp omits
+  it entirely, and a consumer must treat an absent `gpu` exactly like no GPU
+  support (render nothing, no error).
+  - `gpu.supported` — whether the host can attach GPUs at all. When `false` the
+    remaining fields are empty/zero and a consumer should hide the GPU section.
+  - `gpu.devices` — the inventory of attachable devices. Each is
+    `{ "id": string, "class": string, "vram_mb": int }`, where `id` is the
+    stable device identifier, `class` a human-readable model/class, and
+    `vram_mb` the device video memory in mebibytes (render human-readably,
+    e.g. `40960 -> 40 GB`).
+  - `gpu.max_gpus` — the maximum number of devices a single contract may be
+    assigned.
+  - `gpu.isolations` — the isolation levels under which a GPU can be attached
+    (a subset of `isolation.supported`).
 
 ### `POST /contracts`
 
@@ -132,9 +155,16 @@ Response:
 {
   "contract_id": "abc123",
   "status": "ready",
-  "ttl_seconds_remaining": 3540
+  "ttl_seconds_remaining": 3540,
+  "gpus": ["GPU-3a1f…"]
 }
 ```
+
+- `gpus` is the list of GPU device ids assigned to this contract, each
+  cross-referable to a `GET /images` `gpu.devices[].id`. It is **optional** —
+  **absent or empty** when no devices are assigned, and always absent on older
+  wisp. A restart-reconciled lease may list a device id the live inventory no
+  longer advertises; a consumer should render such an id as-is (bare, no class).
 
 ### `DELETE /contracts/:id`
 
