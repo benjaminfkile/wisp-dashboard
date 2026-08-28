@@ -1,3 +1,5 @@
+import Alert from '@mui/material/Alert'
+import AlertTitle from '@mui/material/AlertTitle'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import Chip from '@mui/material/Chip'
@@ -9,7 +11,7 @@ import { useCountdown, useElapsed } from '../hooks/useCountdown'
 import { useGpuCapability } from '../hooks/useGpuCapability'
 import LifecycleFeed from './LifecycleFeed'
 import AssignedGpus from './AssignedGpus'
-import type { TrackedContract } from '../hooks/useContracts'
+import { useContracts, type TrackedContract } from '../hooks/useContracts'
 import type { ContractStatus } from '../wisp/types'
 
 type ChipColor = 'success' | 'warning' | 'info' | 'default'
@@ -83,6 +85,8 @@ export default function LeaseOverview({ contract }: { contract: TrackedContract 
   const terminal = isTerminal(contract)
 
   const gpu = useGpuCapability()
+  const { pollErrors } = useContracts()
+  const pollError = pollErrors[contract.contract_id]
 
   const uptime = useElapsed(contract.created_at, terminal)
   const remaining = useCountdown(
@@ -94,6 +98,25 @@ export default function LeaseOverview({ contract }: { contract: TrackedContract 
 
   return (
     <Stack spacing={3}>
+      {!terminal && pollError && (
+        <Alert severity="warning" variant="outlined">
+          <AlertTitle>
+            {pollError.status === 401
+              ? 'Status poll unauthorized'
+              : pollError.status > 0
+                ? `Status poll failed (${pollError.status})`
+                : 'Status poll failed'}
+          </AlertTitle>
+          {pollError.message}
+          {pollError.status === 401 && (
+            <>
+              {' '}
+              Check that the app token in Settings matches the one wisp is
+              configured with.
+            </>
+          )}
+        </Alert>
+      )}
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={1.5}>

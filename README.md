@@ -25,9 +25,14 @@ What the dashboard does today:
   command output).
 - Release a lease.
 
-Not yet used: the `isolation`, `resources.gpus`, `env`, and `external_id`
-create fields, the `GET /contracts` list, and the `os` / `capacity` blocks of
-`GET /images`.
+The typed wisp client and `useWispClient` hook cover every wisp endpoint,
+including `GET /contracts` (typed as `ListContractsResponse`) and the
+`isolation`, `resources.gpus`, `env`, `external_id`, and `meta` create fields;
+the `GET /images` response is typed all the way down to its `os`, `isolation`,
+and `capacity` blocks. The dashboard UI does not surface every one of those
+yet: the create form is still just image / network / TTL / cpus / memory /
+pids / userdata, the list endpoint is unused (the dashboard tracks its own
+leases in `localStorage`), and `os` / `capacity` are not read in any panel.
 
 ## Getting started
 
@@ -44,8 +49,16 @@ To type-check and produce a production build:
 npm run build
 ```
 
-`npm run preview` serves that build locally. There is no test script and no
-linter script; `npm run build` (which runs `tsc -b`) is the only check.
+`npm run preview` serves that build locally. Unit tests live alongside the
+code they cover (e.g. `src/wisp/client.test.ts`) and run under Vitest:
+
+```bash
+npm test          # single run
+npm run test:watch  # watch mode
+```
+
+`npm run build` (which runs `tsc -b`) is the type-check gate. There is no
+linter script.
 
 Note that the `/wisp` proxy below is a **dev-server** feature: `vite preview`
 and a static deployment of `dist/` do not proxy, so the app only talks to wisp
@@ -94,6 +107,14 @@ Settings dialog where you paste that token. It is stored in the browser's
 wisp through the proxy) and is applied automatically to `POST /contracts`,
 `POST /events`, and the `WS /events` handshake. Clearing it removes the key.
 If wisp has no app token configured, leave it empty.
+
+`GET /contracts/:id` and `DELETE /contracts/:id` accept **either** the app
+token or the contract's own token; the dashboard sends the app token when the
+Settings dialog has one and falls back to the per-contract token otherwise.
+That is what keeps the 4 s status poll and the Release action from `401`ing
+when wisp has an app token configured. If the poll does fail, the failing
+status code and message are surfaced on the lease list card and on the lease
+Overview instead of being silently swallowed.
 
 Per-contract tokens are returned once, when a lease is created. The dashboard
 keeps them, together with the rest of its tracked leases, in `localStorage`

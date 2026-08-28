@@ -7,20 +7,31 @@ import type {
   CreateContractResponse,
   ExecResponse,
   ImagesResponse,
+  ListContractsResponse,
   PublishEventRequest,
 } from '../wisp/types'
 
 /**
  * A wisp client bound to the current app token from `useSettings`. The app
- * token is applied automatically to `createContract`, `publishEvent`, and
- * `eventsWsUrl`; per-contract tokens are still passed per call.
+ * token is applied automatically to `createContract`, `listContracts`,
+ * `publishEvent`, and `eventsWsUrl`, and is sent alongside any per-contract
+ * token on `getContract` / `deleteContract` (wisp accepts either credential
+ * on those two endpoints and rejects a token-less request with `401` when it
+ * has an app token configured).
  */
 export interface WispClient {
   health(): Promise<boolean>
   getImages(): Promise<ImagesResponse>
   createContract(req: CreateContractRequest): Promise<CreateContractResponse>
-  getContract(id: string): Promise<ContractStatusResponse>
-  deleteContract(id: string): Promise<ContractStatusResponse>
+  listContracts(): Promise<ListContractsResponse>
+  getContract(
+    id: string,
+    contractToken?: string,
+  ): Promise<ContractStatusResponse>
+  deleteContract(
+    id: string,
+    contractToken?: string,
+  ): Promise<ContractStatusResponse>
   execSync(
     id: string,
     contractToken: string,
@@ -41,8 +52,11 @@ export function useWispClient(): WispClient {
       health: wisp.health,
       getImages: wisp.getImages,
       createContract: (req) => wisp.createContract(req, appToken || undefined),
-      getContract: wisp.getContract,
-      deleteContract: wisp.deleteContract,
+      listContracts: () => wisp.listContracts(appToken || undefined),
+      getContract: (id, contractToken) =>
+        wisp.getContract(id, appToken || undefined, contractToken),
+      deleteContract: (id, contractToken) =>
+        wisp.deleteContract(id, appToken || undefined, contractToken),
       execSync: wisp.execSync,
       publishEvent: (req) => wisp.publishEvent(req, appToken || undefined),
       execStreamPath: wisp.execStreamPath,

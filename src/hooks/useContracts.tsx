@@ -23,10 +23,10 @@ export const CONTRACTS_KEY = 'wisp.contracts'
 const POLL_INTERVAL_MS = 4000
 
 /**
- * A contract this dashboard created and now tracks. Wisp has no "list
- * contracts" endpoint, so the dashboard is the source of truth for which
- * contracts exist — including the per-contract `token` (returned only at
- * creation and required later for exec / shell), which is persisted so it
+ * A contract this dashboard created and now tracks. The dashboard uses its
+ * own persisted list as the source of truth (it does not read wisp's
+ * `GET /contracts`), including the per-contract `token` returned only at
+ * creation and required later for exec / shell, which is persisted so it
  * survives a page refresh.
  */
 export interface TrackedContract {
@@ -51,8 +51,24 @@ export interface TrackedContract {
   ended?: boolean
 }
 
+/** Latest status-poll error for a specific contract, surfaced to the UI. */
+export interface PollError {
+  /** HTTP status when the failure was a WispError; `0` for non-HTTP errors. */
+  status: number
+  /** Human-readable message from wisp (or the underlying Error). */
+  message: string
+  /** Client clock at which the failure was observed. */
+  at: number
+}
+
 export interface Contracts {
   contracts: TrackedContract[]
+  /**
+   * Latest status-poll error per contract id (cleared on the next successful
+   * poll). Surfaced by the UI so a failing 4 s poll is visible instead of
+   * silently freezing the displayed status.
+   */
+  pollErrors: Record<string, PollError>
   createLease(req: CreateContractRequest): Promise<TrackedContract>
   releaseLease(id: string): Promise<void>
   refresh(id: string): Promise<void>
@@ -105,13 +121,13 @@ const ContractsContext = createContext<Contracts | null>(null)
 export function ContractsProvider({ children }: { children: ReactNode }) {
   const client = useWispClient()
   const [contracts, setContracts] = useState<TrackedContract[]>(readContracts)
+  const [pollErrors, setPollErrors] = useState<Record<string, PollError>>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const select = useCallback((id: string | null) => {
     setSelectedId(id)
   }, [])
 
-  // Persist on every change.
   useEffect(() => {
     writeContracts(contracts)
   }, [contracts])
@@ -127,6 +143,25 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
+
+  const clearPollError = useCallback((id: string) => {
+    setPollErrors((prev) => {
+      if (!(id in prev)) return prev
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }, [])
+
+  const recordPollError = useCallback((id: string, err: unknown) => {
+    const status = err instanceof WispError ? err.status : 0
+    const message =
+      err instanceof Error && err.message ? err.message : 'poll failed'
+    setPollErrors((prev) => ({
+      ...prev,
+      [id]: { status, message, at: Date.now() },
+    }))
+  }, [])
 
   const createLease = useCallback(
     async (req: CreateContractRequest): Promise<TrackedContract> => {
@@ -146,10 +181,18 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
     [client],
   )
 
+  const contractsRef = useRef(contracts)
+  contractsRef.current = contracts
+
+  /** Look up the persisted per-contract token so it can be sent as a fallback. */
+  const tokenFor = useCallback((id: string): string | undefined => {
+    return contractsRef.current.find((c) => c.contract_id === id)?.token
+  }, [])
+
   const releaseLease = useCallback(
     async (id: string): Promise<void> => {
       try {
-        await client.deleteContract(id)
+        await client.deleteContract(id, tokenFor(id))
       } catch (err) {
         // A 404 means it's already gone — treat as released either way.
         if (!(err instanceof WispError && err.status === 404)) throw err
@@ -159,20 +202,22 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
         status: 'released',
         ttl_seconds_remaining: 0,
       })
+      clearPollError(id)
     },
-    [client, patch],
+    [client, patch, tokenFor, clearPollError],
   )
 
   const refresh = useCallback(
     async (id: string): Promise<void> => {
       try {
-        const res = await client.getContract(id)
+        const res = await client.getContract(id, tokenFor(id))
         patch(id, {
           status: res.status,
           ttl_seconds_remaining: res.ttl_seconds_remaining,
           // Reflect the live device assignment (absent on older wisp).
           gpus: res.gpus,
         })
+        clearPollError(id)
       } catch (err) {
         if (err instanceof WispError && err.status === 404) {
           // Container destroyed / unknown — the contract is gone.
@@ -181,32 +226,34 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
             status: 'expired',
             ttl_seconds_remaining: 0,
           })
+          clearPollError(id)
           return
         }
+        recordPollError(id, err)
         throw err
       }
     },
-    [client, patch],
+    [client, patch, tokenFor, clearPollError, recordPollError],
   )
 
   const removeLease = useCallback((id: string) => {
     setContracts((prev) => prev.filter((c) => c.contract_id !== id))
+    clearPollError(id)
     // If the removed contract was open in the detail view, return to the list.
     setSelectedId((cur) => (cur === id ? null : cur))
-  }, [])
+  }, [clearPollError])
 
   // Single app-wide poll loop for all non-terminal contracts. `refresh` is kept
   // in a ref so the interval never has to be torn down/recreated on each change.
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
-  const contractsRef = useRef(contracts)
-  contractsRef.current = contracts
 
   useEffect(() => {
     const tick = () => {
       for (const c of contractsRef.current) {
         if (!isDone(c)) {
-          // Swallow transient errors; the next tick retries.
+          // `refresh` records failures into `pollErrors` for the UI; the next
+          // tick retries. Any throw here is only for downstream awaiters.
           void refreshRef.current(c.contract_id).catch(() => {})
         }
       }
@@ -218,6 +265,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Contracts>(
     () => ({
       contracts,
+      pollErrors,
       createLease,
       releaseLease,
       refresh,
@@ -225,7 +273,16 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       selectedId,
       select,
     }),
-    [contracts, createLease, releaseLease, refresh, removeLease, selectedId, select],
+    [
+      contracts,
+      pollErrors,
+      createLease,
+      releaseLease,
+      refresh,
+      removeLease,
+      selectedId,
+      select,
+    ],
   )
 
   return (
