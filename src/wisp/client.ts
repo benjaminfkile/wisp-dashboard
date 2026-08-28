@@ -1,8 +1,7 @@
 // Typed HTTP/WebSocket client for the wisp broker API.
 // Mirrors docs/WISP_API.md and reuses the shapes from ./types.
 // Every call is a SAME-ORIGIN request under `/wisp` (Vite proxies it), so the
-// browser never hits CORS. URL/string builders here do NOT open sockets or SSE
-// streams — later tasks consume them.
+// browser never hits CORS.
 
 import type {
   ContractStatusResponse,
@@ -10,6 +9,7 @@ import type {
   CreateContractResponse,
   ExecResponse,
   ImagesResponse,
+  ListContractsResponse,
   PublishEventRequest,
 } from './types'
 
@@ -63,6 +63,19 @@ function bearer(token?: string): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+/**
+ * Pick which token to send on `GET /contracts/:id` and `DELETE /contracts/:id`.
+ * Wisp accepts either the app token or the contract's own token; prefer the app
+ * token when the operator has one configured and fall back to the contract
+ * token so a per-lease credential still works when no app token is set.
+ */
+function contractAuthToken(
+  appToken?: string,
+  contractToken?: string,
+): string | undefined {
+  return appToken || contractToken || undefined
+}
+
 /** `GET /wisp/healthz` — true iff the body is `{status:"ok"}`. */
 export async function health(): Promise<boolean> {
   try {
@@ -78,8 +91,9 @@ export async function health(): Promise<boolean> {
 }
 
 /**
- * `GET /wisp/images` — the image allow-list, default image, and operator
- * limits. Unauthenticated (no token needed).
+ * `GET /wisp/images`: the image allow-list, default image, operator limits,
+ * effective isolation posture, host GPU capability, and aggregate capacity.
+ * Unauthenticated (no token needed).
  */
 export function getImages(): Promise<ImagesResponse> {
   return request<ImagesResponse>('/images')
@@ -97,16 +111,54 @@ export function createContract(
   })
 }
 
-/** `GET /wisp/contracts/:id` — current contract status. */
-export function getContract(id: string): Promise<ContractStatusResponse> {
-  return request<ContractStatusResponse>(`/contracts/${encodeURIComponent(id)}`)
+/**
+ * `GET /wisp/contracts`: the non-terminal contracts wisp currently holds,
+ * each with its per-contract token. Requires the app token when wisp has one
+ * set. The dashboard does not call this today (it tracks its own leases in
+ * `localStorage`).
+ */
+export function listContracts(
+  appToken?: string,
+): Promise<ListContractsResponse> {
+  return request<ListContractsResponse>('/contracts', {
+    headers: bearer(appToken),
+  })
 }
 
-/** `DELETE /wisp/contracts/:id` — release the container (idempotent). */
-export function deleteContract(id: string): Promise<ContractStatusResponse> {
+/**
+ * `GET /wisp/contracts/:id`: current contract status. Wisp accepts either
+ * the app token or the contract's own token; pass whichever the caller has.
+ * When wisp has an app token configured and neither is supplied, wisp returns
+ * `401`.
+ */
+export function getContract(
+  id: string,
+  appToken?: string,
+  contractToken?: string,
+): Promise<ContractStatusResponse> {
   return request<ContractStatusResponse>(
     `/contracts/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
+    { headers: bearer(contractAuthToken(appToken, contractToken)) },
+  )
+}
+
+/**
+ * `DELETE /wisp/contracts/:id`: release the container (idempotent). Wisp
+ * accepts either the app token or the contract's own token; pass whichever
+ * the caller has. When wisp has an app token configured and neither is
+ * supplied, wisp returns `401`.
+ */
+export function deleteContract(
+  id: string,
+  appToken?: string,
+  contractToken?: string,
+): Promise<ContractStatusResponse> {
+  return request<ContractStatusResponse>(
+    `/contracts/${encodeURIComponent(id)}`,
+    {
+      method: 'DELETE',
+      headers: bearer(contractAuthToken(appToken, contractToken)),
+    },
   )
 }
 
@@ -140,7 +192,7 @@ export async function publishEvent(
   if (!res.ok) throw await toWispError(res)
 }
 
-// --- URL / string builders (no I/O — later tasks open the actual streams) ---
+// --- URL / string builders for endpoints the client does not open itself ---
 
 /** Path for the streaming exec SSE endpoint. */
 export function execStreamPath(id: string): string {

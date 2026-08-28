@@ -12,7 +12,12 @@ import Paper from '@mui/material/Paper'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
-import { useContracts, type TrackedContract } from '../hooks/useContracts'
+import WarningIcon from '@mui/icons-material/Warning'
+import {
+  useContracts,
+  type PollError,
+  type TrackedContract,
+} from '../hooks/useContracts'
 import { useGpuCapability } from '../hooks/useGpuCapability'
 import type { ContractStatus, GpuDevice } from '../wisp/types'
 
@@ -59,13 +64,22 @@ function gpuLabel(id: string, byId: Map<string, GpuDevice>): string {
   return byId.get(id)?.class ?? id
 }
 
+/** Format a poll error as a short human summary (e.g. `poll: 401 unauthorized`). */
+function pollErrorLabel(err: PollError): string {
+  return err.status > 0
+    ? `poll: ${err.status} ${err.message}`
+    : `poll: ${err.message}`
+}
+
 /** A single tracked-contract card. */
 function ContractCard({
   contract,
   devices,
+  pollError,
 }: {
   contract: TrackedContract
   devices?: GpuDevice[]
+  pollError?: PollError
 }) {
   const { releaseLease, removeLease, select } = useContracts()
   const [copied, setCopied] = useState(false)
@@ -136,6 +150,21 @@ function ContractCard({
                 color={STATUS_COLOR[contract.status]}
                 label={contract.status}
               />
+              {!terminal && pollError && (
+                <Tooltip title={pollErrorLabel(pollError)}>
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    color="warning"
+                    icon={<WarningIcon fontSize="small" />}
+                    label={
+                      pollError.status > 0
+                        ? `poll ${pollError.status}`
+                        : 'poll failed'
+                    }
+                  />
+                </Tooltip>
+              )}
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               image:{' '}
@@ -212,7 +241,7 @@ function ContractCard({
  * `ContractsProvider`.
  */
 export default function ContractList() {
-  const { contracts } = useContracts()
+  const { contracts, pollErrors } = useContracts()
   const gpu = useGpuCapability()
 
   if (contracts.length === 0) {
@@ -232,7 +261,12 @@ export default function ContractList() {
   return (
     <Stack spacing={2}>
       {contracts.map((c) => (
-        <ContractCard key={c.contract_id} contract={c} devices={gpu?.devices} />
+        <ContractCard
+          key={c.contract_id}
+          contract={c}
+          devices={gpu?.devices}
+          pollError={pollErrors[c.contract_id]}
+        />
       ))}
     </Stack>
   )
