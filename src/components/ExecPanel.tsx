@@ -74,8 +74,8 @@ export default function ExecPanel({ contract }: { contract: TrackedContract }) {
     contract.ended === true ||
     contract.status === 'released' ||
     contract.status === 'expired'
-  // Exec is only offered while the lease is fully ready (not merely expiring).
-  const usable = !ended && contract.status === 'ready'
+  // Exec is available while the lease is live (ready, or briefly expiring).
+  const usable = !ended && (contract.status === 'ready' || contract.status === 'expiring')
 
   /** Append text to the output, coalescing with the last same-stream run and
    * front-trimming to the size cap. */

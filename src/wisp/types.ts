@@ -272,11 +272,27 @@ export type LifecycleEventType =
   | 'contract.expired'
 
 /**
- * Lifecycle bus message: `{type, contract_id, status}`.
- * Emitted for each contract state transition.
+ * Reason a contract ended up `expired`, carried on every `contract.expired`
+ * event. `ttl_expired` is the TTL running out; `container_died` is the reaper
+ * detecting the backing container died out of band (docker kill / rm / OOM)
+ * while the lease was `ready` or `expiring`; `provisioning_failed` is the
+ * synchronous create failing during provisioning (e.g. `userdata` exiting
+ * non-zero). Only `contract.expired` carries this; other lifecycle events do
+ * not.
+ */
+export type ContractExpiredReason =
+  | 'ttl_expired'
+  | 'container_died'
+  | 'provisioning_failed'
+
+/**
+ * Lifecycle bus message: `{type, contract_id, status}`. Emitted for each
+ * contract state transition. `contract.expired` additionally carries a
+ * `reason`; the other lifecycle events do not.
  */
 export interface LifecycleEvent {
   type: LifecycleEventType
   contract_id: string
   status: ContractStatus
+  reason?: ContractExpiredReason
 }

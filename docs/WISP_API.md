@@ -306,7 +306,7 @@ forgotten is a `404`.
 ### `POST /contracts/:id/exec`
 
 Requires the **per-contract token**. Runs a command in the contract's container.
-The contract must be `ready`: any other state (including `expiring`) is a `409`
+The contract must be `ready` or `expiring`: any other state is a `409`
 ("contract not ready"). Unknown id is `404`, missing/invalid token is `401`, an
 empty or non-JSON body is `400`.
 
@@ -368,9 +368,9 @@ body (`src/hooks/useExecStream.ts`).
 ### `WS /contracts/:id/shell`
 
 Requires the **per-contract token** (via `?token=` or the
-`bearer.<contract-token>` subprotocol). The contract must be `ready` (`409`
-otherwise; `404` unknown, `401` bad token; all rejected before the upgrade).
-Opens an interactive PTY as a single **raw duplex byte stream**:
+`bearer.<contract-token>` subprotocol). The contract must be `ready` or
+`expiring` (`409` otherwise; `404` unknown, `401` bad token; all rejected before
+the upgrade). Opens an interactive PTY as a single **raw duplex byte stream**:
 
 - Bytes the **server** sends (binary frames) are terminal output to render.
 - Bytes the **client** sends are keystrokes forwarded to the shell's stdin.
@@ -417,12 +417,11 @@ requested -> provisioning -> ready -> expiring -> released | expired
 - `requested`: accepted, not yet provisioned. Transient; a synchronous create
   passes through it before responding, so a client normally never observes it.
 - `provisioning`: container is being created and `userdata` is running.
-- `ready`: leased and usable (exec / shell available). This is the **only**
-  state in which exec and shell are accepted.
+- `ready`: leased and usable (exec / shell available).
 - `expiring`: a warning window a configurable lead time before the TTL. The
-  container is still alive, but **exec and shell are rejected with `409`** in
-  this state; it exists so a client can react to the `contract.expiring` bus
-  event.
+  container is still alive and **exec and shell remain accepted** in this
+  state; it exists so a client can react to the `contract.expiring` bus event
+  and wind work down before the TTL elapses.
 - `released`: explicitly released via `DELETE`.
 - `expired`: the TTL elapsed, the backing container died out of band (docker
   kill / rm / OOM, detected by the reaper while `ready` or `expiring`), or
@@ -434,7 +433,8 @@ non-terminal state (including `requested` and `provisioning`).
 ### Lifecycle bus events
 
 Wisp publishes a lifecycle event on the bus for each transition. Each carries
-`{ "contract_id": string, "status": string }` in its `data`:
+`{ "contract_id": string, "status": string }` in its `data`; `contract.expired`
+additionally carries a `reason` string:
 
 | Event                | Emitted when the contract becomes |
 | -------------------- | --------------------------------- |
@@ -442,7 +442,19 @@ Wisp publishes a lifecycle event on the bus for each transition. Each carries
 | `contract.ready`     | `ready`                           |
 | `contract.expiring`  | `expiring`                        |
 | `contract.released`  | `released`                        |
-| `contract.expired`   | `expired` (TTL elapsed or container died) |
+| `contract.expired`   | `expired` (TTL elapsed, backing container died, or provisioning failed) |
 
-A contract that goes `expired` because **provisioning failed** does not emit
-`contract.expired`; the create call's error response is the only signal.
+Every `contract.expired` event carries a `reason` field on its `data`
+distinguishing the three cases:
+
+- `"ttl_expired"`: the reaper ended the lease because its TTL elapsed.
+- `"container_died"`: the reaper detected the backing container died out of
+  band (docker kill / rm / OOM) while the lease was `ready` or `expiring`.
+- `"provisioning_failed"`: the synchronous `POST /contracts` failed during
+  provisioning (for example `userdata` exiting non-zero); the container is
+  destroyed and the contract ends up `expired`. The create call still returns
+  its error response as the primary signal; the bus event lets a passive
+  subscriber observe the same outcome.
+
+Only `contract.expired` carries `reason`; the other lifecycle events are
+unchanged.
