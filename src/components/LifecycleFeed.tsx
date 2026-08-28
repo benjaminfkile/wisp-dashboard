@@ -16,7 +16,11 @@ import CircularProgress from '@mui/material/CircularProgress'
 import type { SvgIconComponent } from '@mui/icons-material'
 import { useWispClient } from '../hooks/useWispClient'
 import { useEventStream } from '../hooks/useEventStream'
-import type { LifecycleEvent, LifecycleEventType } from '../wisp/types'
+import type {
+  ContractExpiredReason,
+  LifecycleEvent,
+  LifecycleEventType,
+} from '../wisp/types'
 
 /** The lifecycle event types this feed subscribes to. */
 const LIFECYCLE_TYPES: LifecycleEventType[] = [
@@ -46,10 +50,26 @@ function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString()
 }
 
+/** Human-readable labels for the `reason` field on `contract.expired`. */
+const EXPIRED_REASON_LABEL: Record<ContractExpiredReason, string> = {
+  ttl_expired: 'TTL expired',
+  container_died: 'container died',
+  provisioning_failed: 'provisioning failed',
+}
+
+/** Narrow an unknown value to a known `contract.expired` reason. */
+function toExpiredReason(v: unknown): ContractExpiredReason | undefined {
+  return v === 'ttl_expired' || v === 'container_died' || v === 'provisioning_failed'
+    ? v
+    : undefined
+}
+
 /**
  * Normalize a raw bus message into a `LifecycleEvent`, tolerating both the
  * flat shape and the documented `{type, data:{contract_id, status}}` wire
  * shape. Returns null when it is not a lifecycle event we understand.
+ * `contract.expired` additionally carries `reason`; the other lifecycle
+ * events do not.
  */
 function toLifecycle(raw: unknown): LifecycleEvent | null {
   if (!raw || typeof raw !== 'object') return null
@@ -66,10 +86,14 @@ function toLifecycle(raw: unknown): LifecycleEvent | null {
   const status = (obj.status ?? data.status) as unknown
   if (typeof contract_id !== 'string') return null
 
+  const reason =
+    type === 'contract.expired' ? toExpiredReason(obj.reason ?? data.reason) : undefined
+
   return {
     type: type as LifecycleEventType,
     contract_id,
     status: (typeof status === 'string' ? status : 'requested') as LifecycleEvent['status'],
+    ...(reason ? { reason } : {}),
   }
 }
 
@@ -138,7 +162,11 @@ export default function LifecycleFeed({ contractId }: { contractId: string }) {
                 </ListItemIcon>
                 <ListItemText
                   primary={
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                    >
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {style.label}
                       </Typography>
@@ -149,6 +177,15 @@ export default function LifecycleFeed({ contractId }: { contractId: string }) {
                         label={ev.type}
                         sx={{ height: 18, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
                       />
+                      {ev.type === 'contract.expired' && ev.reason && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          color={style.color === 'default' ? undefined : style.color}
+                          label={EXPIRED_REASON_LABEL[ev.reason]}
+                          sx={{ height: 18, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                        />
+                      )}
                     </Stack>
                   }
                   secondary={formatTime(receivedAt)}
