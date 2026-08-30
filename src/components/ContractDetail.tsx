@@ -24,12 +24,21 @@ const STATUS_COLOR: Record<ContractStatus, ChipColor> = {
   provisioning: 'warning',
   ready: 'success',
   expiring: 'warning',
+  releasing: 'warning',
   released: 'default',
   expired: 'default',
 }
 
 function isTerminal(c: TrackedContract): boolean {
   return c.ended === true || c.status === 'released' || c.status === 'expired'
+}
+
+/**
+ * True while wisp is tearing the container down. `releasing` is non-terminal
+ * but the dashboard disables Release and exec/console for it.
+ */
+function isReleasing(c: TrackedContract): boolean {
+  return c.status === 'releasing'
 }
 
 /** Shorten a contract id for display, keeping enough to disambiguate. */
@@ -66,9 +75,10 @@ export default function ContractDetail({
   const { select, releaseLease } = useContracts()
   const [tab, setTab] = useState(0)
   const [copied, setCopied] = useState(false)
-  const [releasing, setReleasing] = useState(false)
+  const [busyReleasing, setBusyReleasing] = useState(false)
 
   const terminal = isTerminal(contract)
+  const releasing = isReleasing(contract)
 
   async function copyId() {
     try {
@@ -81,11 +91,11 @@ export default function ContractDetail({
   }
 
   async function release() {
-    setReleasing(true)
+    setBusyReleasing(true)
     try {
       await releaseLease(contract.contract_id)
     } finally {
-      setReleasing(false)
+      setBusyReleasing(false)
     }
   }
 
@@ -140,10 +150,10 @@ export default function ContractDetail({
           color="error"
           variant="outlined"
           onClick={release}
-          disabled={terminal || releasing}
+          disabled={terminal || releasing || busyReleasing}
           sx={{ flexShrink: 0 }}
         >
-          {releasing ? 'Releasing…' : 'Release'}
+          {busyReleasing || releasing ? 'Releasing…' : 'Release'}
         </Button>
       </Stack>
 

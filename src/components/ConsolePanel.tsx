@@ -63,7 +63,9 @@ export default function ConsolePanel({ contract }: { contract: TrackedContract }
     contract.ended === true ||
     contract.status === 'released' ||
     contract.status === 'expired'
+  const releasing = contract.status === 'releasing'
   // The shell is available while the lease is live (ready, or briefly expiring).
+  // Wisp rejects the handshake with `409` when the contract is in `releasing`.
   const usable = !ended && (contract.status === 'ready' || contract.status === 'expiring')
 
   // Create the xterm terminal + FitAddon once the lease is usable, keep it
@@ -199,12 +201,14 @@ export default function ConsolePanel({ contract }: { contract: TrackedContract }
         <Stack spacing={1.5} sx={{ alignItems: 'center' }}>
           <TerminalIcon fontSize="large" color="disabled" />
           <Typography variant="h6" component="p">
-            {ended ? 'Shell unavailable' : 'Shell not ready yet'}
+            {ended || releasing ? 'Shell unavailable' : 'Shell not ready yet'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {ended
               ? 'This lease has ended, so its interactive shell is no longer available.'
-              : `The shell becomes available once the lease is ready (currently: ${contract.status}).`}
+              : releasing
+                ? 'This lease is being released, so its interactive shell is no longer available.'
+                : `The shell becomes available once the lease is ready (currently: ${contract.status}).`}
           </Typography>
         </Stack>
       </Paper>

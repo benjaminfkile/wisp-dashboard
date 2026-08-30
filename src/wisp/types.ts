@@ -2,13 +2,17 @@
 
 /**
  * Contract lifecycle states.
- * Flow: requested -> provisioning -> ready -> expiring -> released | expired
+ * Flow: requested -> provisioning -> ready -> expiring -> releasing -> released,
+ * with `expired` reachable from any active state. `releasing` is the transient,
+ * non-terminal fence a `DELETE` installs before killing the container; exec and
+ * shell are `409` in `releasing`, and `GET /contracts` excludes it.
  */
 export type ContractStatus =
   | 'requested'
   | 'provisioning'
   | 'ready'
   | 'expiring'
+  | 'releasing'
   | 'released'
   | 'expired'
 
@@ -189,8 +193,9 @@ export interface ContractStatusResponse {
  * `id` here rather than `contract_id`; `expires_at` is Unix seconds and
  * `reserved_cpus` / `reserved_memory_mb` are the post-clamp amounts reserved
  * against the host capacity budget. `status` here is always one of
- * `provisioning`, `ready`, or `expiring` (wisp excludes terminal contracts
- * and the transient `requested` state from this list).
+ * `provisioning`, `ready`, or `expiring` (wisp excludes terminal contracts,
+ * the transient `requested` state, and the transient `releasing` fence from
+ * this list).
  */
 export interface ContractListEntry {
   id: string

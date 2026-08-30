@@ -21,6 +21,7 @@ const STATUS_COLOR: Record<ContractStatus, ChipColor> = {
   provisioning: 'warning',
   ready: 'success',
   expiring: 'warning',
+  releasing: 'warning',
   released: 'default',
   expired: 'default',
 }

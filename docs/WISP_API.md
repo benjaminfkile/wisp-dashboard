@@ -147,6 +147,14 @@ Requires the **app token**. Creates and provisions a new contract (container).
 The call is **synchronous**: wisp boots the container, runs `userdata`, and only
 then responds, so a successful response already reports the final state.
 
+On the success path wisp emits a single structured `contract provisioned` log
+line with per-phase timings so an operator can pin a slow create to the phase
+that stalled. Its fields are `contract_id`, `image`, `isolation`, `total_ms`,
+`image_ms`, `create_ms`, `start_ms`, and `userdata_ms`; every duration is in
+milliseconds and a phase that did not run (for example an empty `userdata`)
+reports `0`. These are server-side log fields, not part of the HTTP response
+body.
+
 Request body. `ttl_seconds` is **required**; `image`, `network`, `isolation`,
 `resources`, `userdata`, `env`, `external_id`, and `meta` are optional:
 
@@ -219,9 +227,9 @@ success path.
 
 Requires the **app token**. Lists every **non-terminal** contract together with
 its current per-contract token, so a restarted local agent can rebuild its lease
-map. Terminal contracts (`released`, `expired`) and the transient `requested`
-state are excluded, so `status` here is always one of `provisioning`, `ready`,
-or `expiring`.
+map. Terminal contracts (`released`, `expired`), the transient `requested`
+state, and the transient `releasing` fence are excluded, so `status` here is
+always one of `provisioning`, `ready`, or `expiring`.
 
 Response:
 
@@ -288,11 +296,16 @@ Response:
 ### `DELETE /contracts/:id`
 
 Requires the **app token or that contract's token**. Releases and destroys the
-container. Returns the **same shape** as `GET`. It is **idempotent**: a `DELETE`
-against a contract that is already `released` or `expired` returns `200` with
-the contract's current terminal status (which may therefore be `expired`
-rather than `released`) and frees nothing twice. An id the reaper has already
-forgotten is a `404`.
+container. Returns the **same shape** as `GET`. The handler first transitions
+the contract to the transient, non-terminal `releasing` state to fence the
+reaper off it, then kills the container, then completes the terminal transition
+to `released`. It is **idempotent**: a `DELETE` against a contract that is
+already `released` or `expired` returns `200` with the contract's current
+terminal status (which may therefore be `expired` rather than `released`) and
+frees nothing twice; a `DELETE` against a contract already in `releasing` (a
+concurrent release is in flight) likewise returns `200` echoing the current
+`releasing` status without a second container kill or a double free. An id the
+reaper has already forgotten is a `404`.
 
 ```json
 {
@@ -307,8 +320,9 @@ forgotten is a `404`.
 
 Requires the **per-contract token**. Runs a command in the contract's container.
 The contract must be `ready` or `expiring`: any other state is a `409`
-("contract not ready"). Unknown id is `404`, missing/invalid token is `401`, an
-empty or non-JSON body is `400`.
+("contract not ready"), including the transient `releasing` fence a `DELETE`
+installs before killing the container. Unknown id is `404`, missing/invalid
+token is `401`, an empty or non-JSON body is `400`.
 
 Request body:
 
@@ -369,8 +383,9 @@ body (`src/hooks/useExecStream.ts`).
 
 Requires the **per-contract token** (via `?token=` or the
 `bearer.<contract-token>` subprotocol). The contract must be `ready` or
-`expiring` (`409` otherwise; `404` unknown, `401` bad token; all rejected before
-the upgrade). Opens an interactive PTY as a single **raw duplex byte stream**:
+`expiring` (`409` otherwise, including the transient `releasing` fence; `404`
+unknown, `401` bad token; all rejected before the upgrade). Opens an interactive
+PTY as a single **raw duplex byte stream**:
 
 - Bytes the **server** sends (binary frames) are terminal output to render.
 - Bytes the **client** sends are keystrokes forwarded to the shell's stdin.
@@ -411,8 +426,10 @@ as JSON text messages, each shaped like:
 States progress as:
 
 ```
-requested -> provisioning -> ready -> expiring -> released | expired
+requested -> provisioning -> ready -> expiring -> releasing -> released
 ```
+
+with `expired` reachable from any active state.
 
 - `requested`: accepted, not yet provisioned. Transient; a synchronous create
   passes through it before responding, so a client normally never observes it.
@@ -422,6 +439,12 @@ requested -> provisioning -> ready -> expiring -> released | expired
   container is still alive and **exec and shell remain accepted** in this
   state; it exists so a client can react to the `contract.expiring` bus event
   and wind work down before the TTL elapses.
+- `releasing`: a transient, **non-terminal** fence a `DELETE` installs before
+  killing the container so the reaper cannot expire (and then purge) the
+  contract from under the release handler. Exec and shell are `409` in this
+  state; `GET /contracts` excludes it; a concurrent `DELETE` returns `200`
+  echoing `releasing` without a second container kill. The state normally
+  exits to `released` once the handler finishes tearing the container down.
 - `released`: explicitly released via `DELETE`.
 - `expired`: the TTL elapsed, the backing container died out of band (docker
   kill / rm / OOM, detected by the reaper while `ready` or `expiring`), or
