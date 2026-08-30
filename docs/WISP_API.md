@@ -443,8 +443,10 @@ with `expired` reachable from any active state.
   killing the container so the reaper cannot expire (and then purge) the
   contract from under the release handler. Exec and shell are `409` in this
   state; `GET /contracts` excludes it; a concurrent `DELETE` returns `200`
-  echoing `releasing` without a second container kill. The state normally
-  exits to `released` once the handler finishes tearing the container down.
+  echoing `releasing` without a second container kill. The state exits to
+  `released` once the handler finishes tearing the container down; the reaper
+  skips it only for a short grace window (30 s), after which it expires the
+  contract like any other non-terminal one.
 - `released`: explicitly released via `DELETE`.
 - `expired`: the TTL elapsed, the backing container died out of band (docker
   kill / rm / OOM, detected by the reaper while `ready` or `expiring`), or
