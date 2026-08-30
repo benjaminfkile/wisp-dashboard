@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { useWispClient } from './useWispClient'
 import { WispError } from '../wisp/client'
+import { TERMINAL_STATUSES } from '../wisp/lifecycle'
 import type {
   ContractStatus,
   CreateContractRequest,
@@ -79,15 +80,9 @@ export interface Contracts {
   select(id: string | null): void
 }
 
-/** Terminal states that are never polled. */
-const TERMINAL: ReadonlySet<ContractStatus> = new Set<ContractStatus>([
-  'released',
-  'expired',
-])
-
 /** True when a contract should no longer be polled. */
 function isDone(c: TrackedContract): boolean {
-  return c.ended === true || TERMINAL.has(c.status)
+  return c.ended === true || TERMINAL_STATUSES.has(c.status)
 }
 
 /** Read persisted tracked contracts, tolerating unavailable/corrupt storage. */
@@ -191,17 +186,26 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
 
   const releaseLease = useCallback(
     async (id: string): Promise<void> => {
+      let status: ContractStatus = 'released'
+      let ttlRemaining = 0
       try {
-        await client.deleteContract(id, tokenFor(id))
+        const res = await client.deleteContract(id, tokenFor(id))
+        status = res.status
+        ttlRemaining = res.ttl_seconds_remaining
       } catch (err) {
-        // A 404 means it's already gone — treat as released either way.
+        // A 404 means it's already gone; treat as released either way.
         if (!(err instanceof WispError && err.status === 404)) throw err
       }
-      patch(id, {
-        ended: true,
-        status: 'released',
-        ttl_seconds_remaining: 0,
-      })
+      // Trust the wire status. `released` and `expired` are terminal; the
+      // transient `releasing` fence keeps polling running until the terminal
+      // transition lands, and a concurrent DELETE that saw `releasing` is
+      // echoed here without a spurious jump to `released`.
+      const fields: Partial<TrackedContract> = {
+        status,
+        ttl_seconds_remaining: ttlRemaining,
+      }
+      if (TERMINAL_STATUSES.has(status)) fields.ended = true
+      patch(id, fields)
       clearPollError(id)
     },
     [client, patch, tokenFor, clearPollError],

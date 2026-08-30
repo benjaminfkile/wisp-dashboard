@@ -74,7 +74,9 @@ export default function ExecPanel({ contract }: { contract: TrackedContract }) {
     contract.ended === true ||
     contract.status === 'released' ||
     contract.status === 'expired'
+  const releasing = contract.status === 'releasing'
   // Exec is available while the lease is live (ready, or briefly expiring).
+  // Wisp answers `409 contract not ready` for exec against `releasing`.
   const usable = !ended && (contract.status === 'ready' || contract.status === 'expiring')
 
   /** Append text to the output, coalescing with the last same-stream run and
@@ -192,7 +194,9 @@ export default function ExecPanel({ contract }: { contract: TrackedContract }) {
         <Alert severity="info" variant="outlined">
           {ended
             ? 'This lease has ended, so commands can no longer be run against it.'
-            : `Commands can be run once the lease is ready (currently: ${contract.status}).`}
+            : releasing
+              ? 'This lease is being released, so commands can no longer be run against it.'
+              : `Commands can be run once the lease is ready (currently: ${contract.status}).`}
         </Alert>
       )}
 

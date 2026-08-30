@@ -29,6 +29,7 @@ const STATUS_COLOR: Record<ContractStatus, ChipColor> = {
   provisioning: 'warning',
   ready: 'success',
   expiring: 'warning',
+  releasing: 'warning',
   released: 'default',
   expired: 'default',
 }
@@ -36,6 +37,16 @@ const STATUS_COLOR: Record<ContractStatus, ChipColor> = {
 /** Terminal states — the Release action is disabled for these. */
 function isTerminal(c: TrackedContract): boolean {
   return c.ended === true || c.status === 'released' || c.status === 'expired'
+}
+
+/**
+ * True while wisp is tearing the container down. `releasing` is non-terminal
+ * (wisp will transition it to `released` once the container kill lands) but
+ * the dashboard disables Release and exec/console for it, so it is treated as
+ * a terminal-in-progress state.
+ */
+function isReleasing(c: TrackedContract): boolean {
+  return c.status === 'releasing'
 }
 
 /** Shorten a contract id for display, keeping enough to disambiguate. */
@@ -83,9 +94,10 @@ function ContractCard({
 }) {
   const { releaseLease, removeLease, select } = useContracts()
   const [copied, setCopied] = useState(false)
-  const [releasing, setReleasing] = useState(false)
+  const [busyReleasing, setBusyReleasing] = useState(false)
 
   const terminal = isTerminal(contract)
+  const releasing = isReleasing(contract)
   const byId = new Map((devices ?? []).map((d) => [d.id, d]))
 
   async function copyId() {
@@ -99,11 +111,11 @@ function ContractCard({
   }
 
   async function release() {
-    setReleasing(true)
+    setBusyReleasing(true)
     try {
       await releaseLease(contract.contract_id)
     } finally {
-      setReleasing(false)
+      setBusyReleasing(false)
     }
   }
 
@@ -210,9 +222,9 @@ function ContractCard({
               color="error"
               variant="outlined"
               onClick={release}
-              disabled={terminal || releasing}
+              disabled={terminal || releasing || busyReleasing}
             >
-              {releasing ? 'Releasing…' : 'Release'}
+              {busyReleasing || releasing ? 'Releasing…' : 'Release'}
             </Button>
             {terminal && (
               <Tooltip title="Forget this contract">

@@ -163,6 +163,18 @@ describe('wisp client', () => {
       expect(err).toBeInstanceOf(WispError)
       expect((err as WispError).status).toBe(401)
     })
+
+    it('returns the `releasing` status when wisp is fencing the reaper mid-release', async () => {
+      installFetchMock(200, {
+        contract_id: 'c1',
+        status: 'releasing',
+        ttl_seconds_remaining: 3,
+      })
+
+      const res = await getContract('c1', 'app-tok')
+
+      expect(res.status).toBe('releasing')
+    })
   })
 
   describe('deleteContract', () => {
@@ -203,6 +215,19 @@ describe('wisp client', () => {
       await deleteContract('c1')
 
       expect(calls[0].headers.Authorization).toBeUndefined()
+    })
+
+    it('surfaces the transient `releasing` status when wisp echoes an in-flight release', async () => {
+      installFetchMock(200, {
+        contract_id: 'c1',
+        status: 'releasing',
+        ttl_seconds_remaining: 5,
+      })
+
+      const res = await deleteContract('c1', 'app-tok')
+
+      expect(res.status).toBe('releasing')
+      expect(res.ttl_seconds_remaining).toBe(5)
     })
   })
 
